@@ -3,8 +3,17 @@ const morgan = require('morgan');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http'); // Require http module
-const socketIo = require('./utils/websocket'); // Import the websocket.js file
+//const socketIo = require('./utils/websocket'); // Import the websocket.js file
 require('dotenv').config();
+// const { Storage } = require('@google-cloud/storage');
+
+
+
+// const storage = new Storage({
+//   projectId: 'imagekeep-ac687  ', // Replace with your Google Cloud project ID
+//   keyFilename: './imagekeep-ac687-firebase-adminsdk-t6lga-032cb2bd96.json', // Replace with your service account key file path
+// });
+
 // const Chat = require('../models/chat');
 const app = express();
 const server = http.createServer(app); // Create an http server
@@ -20,7 +29,8 @@ const authJwt = require('./helpers/jwt');
 app.use(authJwt());
 
 // Static file serving
-app.use('/public/uploads', express.static(__dirname + '/public/uploads'));
+//app.use('/public/uploads', express.static(__dirname + '/public/uploads'));
+//app.use('files/', express.static(__dirname + 'files/'));
 
 // Error handling
 const errorHandler = require('./helpers/error-handler.js');

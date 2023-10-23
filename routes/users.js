@@ -1,4 +1,4 @@
-const { User } = require("../models/user");
+const  {User}  = require("../models/user");
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
@@ -6,51 +6,128 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+const { Storage } = require('@google-cloud/storage');
+const { validationResult } = require('express-validator');
+const admin = require('firebase-admin');
+
+    const serviceAccount = require('../imagekeep-ac687-firebase-adminsdk-t6lga-032cb2bd96.json');
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: 'gs://imagekeep-ac687.appspot.com', // Replace with your actual Firebase Storage bucket URL
+    });
 
 
-const FILE_TYPE_MAP = {
-  "image/png": "png",
-  "image/jpeg": "jpeg",
-  "image/gif": "gif",
-};
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-      const isValid = FILE_TYPE_MAP[file.mimetype];
-      let uploadError = new Error("Invalid image type");
-  
-      if (isValid) {
-        uploadError = null;
-      }
-  
-      cb(uploadError, "public/uploads");
-    },
-    filename: function (req, file, cb) {
-      const originalFileName = file.originalname;
-      const extension = FILE_TYPE_MAP[file.mimetype];
-      
-      // Remove the timestamp from the filename
-      const fileNameWithoutTimestamp = originalFileName.split("-")[0];
-  
-      cb(null, `${fileNameWithoutTimestamp}-${Date.now()}.${extension}`);
-    },
-  });
-  
-  const uploadOptions = multer({ storage: storage });
 
-  router.get("/:id", (req, res) => {
-    const loggedInUserId = req.params.userId;
-  
-    // If you want to exclude the logged-in user, you can use a different query
-    User.find({ _id: { $ne: loggedInUserId } })
-      .then((users) => {
-        res.status(200).json(users);
-      })
-      .catch((err) => {
-        console.log("Error retrieving users", err);
-        res.status(500).json({ message: "Error retrieving users" });
+const storage = new Storage({
+  projectId: 'imagekeep-ac687  ', // Replace with your Google Cloud project ID
+  keyFilename: '../imagekeep-ac687-firebase-adminsdk-t6lga-032cb2bd96.json', // Replace with your service account key file path
+});
+
+// Set up Multer for handling file uploads
+const multerStorage = multer.memoryStorage();
+const upload = multer({ storage: multerStorage });
+
+//const Image = mongoose.model('Image', User);
+
+router.get('/:userId', async (req, res) => {
+  const loggedInUserId = req.params.userId;
+
+  try {
+    // Fetch images and details of other users except the user with the provided userId
+    const users = await User.find({ _id: { $ne: loggedInUserId } }).select('-passwordHash'); // Exclude the passwordHash field
+    const imageUrls = [];
+
+    for (const user of users) {
+      const gcsPath = user.image.replace(/^gs:\/\/(.*?)\//, ''); // Remove 'gs://' prefix and up to the first '/'
+      const [publicUrl] = await storage.bucket('imagekeep-ac687.appspot.com').file(gcsPath).getSignedUrl({
+        action: 'read',
+        // expires: Date.now() + 24 * 60 * 60 * 1000, // URL expires in 24 hours
       });
-   
-  });
+      imageUrls.push({ imageUrl: publicUrl, userDetails: user });
+    }
+    res.json(imageUrls);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching data' });
+  }
+});
+
+
+// const FILE_TYPE_MAP = {
+//   "image/png": "png",
+//   "image/jpeg": "jpeg",
+//   "image/gif": "gif",
+// };
+
+// const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//       const isValid = FILE_TYPE_MAP[file.mimetype];
+//       let uploadError = new Error("Invalid image type");
+  
+//       if (isValid) {
+//         uploadError = null;
+//       }
+  
+//       cb(uploadError, "public/uploads");
+//     },
+//     filename: function (req, file, cb) {
+//       const originalFileName = file.originalname;
+//       const extension = FILE_TYPE_MAP[file.mimetype];
+      
+//       // Remove the timestamp from the filename
+//       const fileNameWithoutTimestamp = originalFileName.split("-")[0];
+  
+//       cb(null, `${fileNameWithoutTimestamp}-${Date.now()}.${extension}`);
+//     },
+//   });
+  
+  //const uploadOptions = multer({ storage: storage });
+
+  //endpoint to access all the users except the user who's is currently logged in!
+
+  // router.get("/:userId", async(req, res) => {
+  //   const loggedInUserId = req.params.userId;
+
+  //   try {
+  //     const images = await Image.find({}, 'path'); // Retrieve only the 'path' field
+  //     const imageUrls = await Promise.all(images.map(async (image) => {
+  //       const gcsPath = image.path.replace(/^gs:\/\/(.*?)\//, ''); // Remove 'gs://' prefix and up to the first '/'
+  //       console.log('gcsPath:', gcsPath); // Log the gcsPath for debugging
+  //       const [publicUrl] = await storage.bucket('imagekeep-ac687.appspot.com').file(gcsPath).getSignedUrl({
+  //         action: 'read',
+  //        // expires: Date.now() + 24 * 60 * 60 * 1000, // URL expires in 24 hours
+  //       });
+  //       console.log('publicUrl:', publicUrl); // Log the publicUrl for debugging
+  //       return publicUrl;
+  //     }));
+      
+  //     res.json({ images: imageUrls });
+  //   } catch (error) {
+  //     console.error(error);
+  //     res.status(500).json({ message: 'Error fetching images' });
+  //   }
+  //   User.find({ _id: { $ne: loggedInUserId } })
+  //     .then((users) => {
+  //       res.status(200).json(users);
+  //     })
+  //     .catch((err) => {
+  //       //console.error("Error retrieving users", err);
+  //       res.status(500).json({ message: `Error retrieving users: ${err.message}` });
+  //     });
+      
+  // });
+  
+  
+// router.get("/:userId", (req, res) => {
+//   const loggedInUserId = req.params.userId;
+//   User.find({ _id: { $ne: loggedInUserId } }).then((users) => {
+//       res.status(200).json(users);
+//     }).catch((err) => {
+//       console.log("Error retrieving users", err);
+//       res.status(500).json({ message: "Error retrieving users" });
+//     });
+// }); 
   
   
 router.get("/", async (req, res) => {
@@ -99,137 +176,133 @@ router.get("/followers", async (req, res) => {
 // });
 
 // Update user by ID
-router.put("/:id", async (req, res) => {
+router.post('/login', async (req, res) => {
   try {
-    const { name, email, password, phoneNumber, isAdmin, role, address } =
-      req.body;
-
-    const existingUser = await User.findById(req.params.id);
-    if (!existingUser) {
-      return res.status(404).json({ message: "User not found" });
+    // Validate input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    let passwordHash = existingUser.passwordHash;
-    if (password) {
-      passwordHash = bcrypt.hashSync(password, 10);
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+      return res.status(400).json({ error: 'Invalid email or password' });
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      {
-        name,
-        email,
-        address,
-        passwordHash,
-        phoneNumber,
-        country,
-        selectedItem,
-        selectedItems,
-        selectedReason,
-        biography
-      },
-      { new: true }
-    );
+    const token = generateToken(user);
+    const image = await fetchUserImage(user);
 
-    res.send(updatedUser);
+    const responseData = {
+      image,
+      userId: user.id,
+      email: user.email,
+      address: user.address,
+      token,
+      name: user.name,
+      phone: user.phoneNumber,
+      country: user.country,
+      selectedItem: user.selectedItem,
+      selectedItems: user.selectedItems,
+      selectedReason: user.selectedReason,
+      followers: user.followers,
+      followings: user.following,
+      status: user.status,
+    };
+
+    res.status(200).json(responseData);
   } catch (error) {
-    console.error("Error updating user by ID:", error);
-    res.status(500).send("Internal server error");
+    console.error('Error during user login:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      const user = await User.findOne({ email });
-  
-      if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-        return res.status(400).json({ error: 'Invalid email or password' });
-      }
-  
-      const secret = process.env.SECRET;
-      const token = jwt.sign(
-        {
-          userId: user._id,
-          isAdmin: user.isAdmin,
-        },
-        secret,
-        { expiresIn: '1d' }
-      );
-      
-      // Update user's last login time and other necessary actions if needed
-      // user.lastLoginTime = new Date();
-      // await user.save();
-  
-      const responseData = {
-        image: user.image || '',
-        userId: user.id,
-        email: user.email,
-        address: user.address,
-        token: token,
-        name: user.name,
-        phone: user.phoneNumber,
-        country: user.country,
-        selectedItem: user.selectedItem,
-        selectedItems: user.selectedItems,
-        selectedReason: user.selectedReason,
-        followers: user.followers,
-        followings: user.following,
-        biography: user.biography,
-      };
-      
-      res.status(200).json(responseData);
-    } catch (error) {
-      console.error('Error during user login:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-  
-// Register vendor and user
-router.post("/register", uploadOptions.single("image"), async (req, res) => {
+// Helper function to generate JWT token
+function generateToken(user) {
+  const secret = process.env.SECRET;
+  return jwt.sign(
+    {
+      userId: user._id,
+      isAdmin: user.isAdmin,
+    },
+    secret,
+    { expiresIn: '24h' }
+  );
+}
+
+// Helper function to fetch user image from Firebase
+async function fetchUserImage(user) {
   try {
-    // Generate a 4-digit random pin
-    const pin = generateRandomPin();
+    const gcsPath = user.image.replace(/^gs:\/\/(.*?)\//, '');
+    const [publicUrl] = await admin
+      .storage()
+      .bucket()
+      .file(gcsPath)
+      .getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 24 * 60 * 60 * 1000,
+      });
 
-    // Set the PIN expiration time (10 minutes from now)
-    const pinExpiry = new Date();
-    pinExpiry.setMinutes(pinExpiry.getMinutes() + 45); // 10 minutes from now
-    const {
-      name,
-      email,
-      password,
-      phoneNumber,
-      selectedItem,
-      selectedItems,
-      selectedReason,      biography,
-
-    } = req.body;
-    const file = req.file;
-    if (!file) {
-      return res.status(400).send("No image in the request");
-    }
-    const fileName = file.filename;
-    const basePath = `${req.protocol}://${req.get("host")}/public/uploads/`;
-    console.log(basePath);
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const user = new User({
-      name,
-      email,
-      passwordHash,
-      phoneNumber,
-      selectedItem,
-      selectedItems,
-      selectedReason,
-      image: `${basePath}${fileName}`,
-      biography,     
-    });
-    const savedUser = await user.save();
-    sendPinToEmail(email, pin); // You need to implement this function
-    res.send(savedUser);
+    return publicUrl || '';
   } catch (error) {
-    console.error( error);
-    res.status(500).json({error:"Internal server error", message: error.message} );
+    console.error('Error fetching Firebase Storage URL:', error);
+    return ''; // Return an empty string or handle the error as needed
   }
+}
+
+
+
+router.post("/register", upload.single("image"), async (req, res) => {
+  try {
+    const bucket = admin.storage().bucket(); // Define bucket here
+    const imageBuffer = req.file.buffer;
+    const uniqueFileName = `${Date.now()}-${req.file.originalname}`;
+    const file = bucket.file(uniqueFileName);
+    const fileStream = file.createWriteStream();
+
+    fileStream.on('error', (err) => {
+      console.error(err);
+      res.status(500).json({ message: 'Error uploading image' });
+    });
+    fileStream.on('finish', async () => {
+      // Save the image path to MongoDB
+      const imagePath = `gs://${bucket.name}/${uniqueFileName}`;
+    
+      // Create a new user and add the image URL to it
+      const { name, email, password, phoneNumber, selectedItem, selectedItems, selectedReason, status } = req.body;
+      const passwordHash = bcrypt.hashSync(password, 10);
+      
+      const user = new User({
+        name,
+        email,
+        passwordHash,
+        phoneNumber,
+        selectedItem,
+        selectedItems,
+        selectedReason,
+        image: imagePath, // Add the image URL to the user object
+        status
+      });
+    
+      const savedUser = await user.save();
+    
+      res.status(200).json({
+        message: 'Image and user uploaded successfully',
+        user: {
+          ...savedUser.toObject(), // Convert Mongoose document to a plain JavaScript object
+          image: imagePath // Add the image URL to the response
+        }
+      });
+    });
+    
+
+    fileStream.end(imageBuffer);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error", message: error.message });
+  }
+
 });
 
 // Delete user by ID
@@ -382,82 +455,125 @@ router.post("/forgot-password", async (req, res) => {
       res.status(500).json({ error: "Internal server error" });
     }
   });
-  // Follow a user
-router.post("/:id/follow", async (req, res) => {
-    try {
-      const userToFollow = await User.findById(req.params.id);
-      const currentUser = req.user; // Assuming you have authenticated the user
-  
-      if (!userToFollow) {
-        return res.status(404).json({ message: "User not found" });
-      }
-  
-      currentUser.following.push(userToFollow._id);
-      userToFollow.followers.push(currentUser._id);
-  
-      await currentUser.save();
-      await userToFollow.save();
-  
-      res.status(200).json({ message: "Successfully followed" });
-    } catch (error) {
-      console.error("Error following user:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-  
-  // Unfollow a user
-  router.post("/:id/unfollow", async (req, res) => {
-    try {
-      const userToUnfollow = await User.findById(req.params.id);
-      const currentUser = req.user; // Assuming you have authenticated the user
-  
-      if (!userToUnfollow) {
-        return res.status(404).json({ message: "User not found" });
-      }
-  
-      currentUser.following.pull(userToUnfollow._id);
-      userToUnfollow.followers.pull(currentUser._id);
-  
-      await currentUser.save();
-      await userToUnfollow.save();
-  
-      res.status(200).json({ message: "Successfully unfollowed" });
-    } catch (error) {
-      console.error("Error unfollowing user:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
 
-  // Get count of followers for a user
-router.get("/:id/followers/count", async (req, res) => {
-    try {
-      const user = await User.findById(req.params.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+  //endpoint to send a request to a user
+router.post("/friend-request", async (req, res) => {
+  const { currentUserId, selectedUserId } = req.body;
+
+  try {
+    //update the recepient's friendRequestsArray!
+    await User.findByIdAndUpdate(selectedUserId, {
+      $push: { freindRequests: currentUserId },
+    });
+
+    //update the sender's sentFriendRequests array
+    await User.findByIdAndUpdate(currentUserId, {
+      $push: { sentFriendRequests: selectedUserId },
+    });
+
+    res.sendStatus(200);
+  } catch (error) {
+    res.sendStatus(500);
+  }
+});
+
+//endpoint to show all the friend-requests of a particular user
+router.get("/friend-request/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    //fetch the user document based on the User id
+    const user = await User.findById(userId)
+      .populate("freindRequests", "name email image")
+      .lean();
+
+    const freindRequests = user.freindRequests;
+
+    res.json(freindRequests);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+//endpoint to accept a friend-request of a particular person
+router.post("/friend-request/accept", async (req, res) => {
+  try {
+    const { senderId, recepientId } = req.body;
+
+    //retrieve the documents of sender and the recipient
+    const sender = await User.findById(senderId);
+    const recepient = await User.findById(recepientId);
+
+    sender.friends.push(recepientId);
+    recepient.friends.push(senderId);
+
+    recepient.freindRequests = recepient.freindRequests.filter(
+      (request) => request.toString() !== senderId.toString()
+    );
+
+    sender.sentFriendRequests = sender.sentFriendRequests.filter(
+      (request) => request.toString() !== recepientId.toString
+    );
+
+    await sender.save();
+    await recepient.save();
+
+    res.status(200).json({ message: "Friend Request accepted successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+//endpoint to access all the friends of the logged in user!
+router.get("/accepted-friends/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).populate(
+      "friends",
+      "name email image"
+    );
+    const acceptedFriends = user.friends;
+    res.json(acceptedFriends);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+router.get("/friend-requests/sent/:userId",async(req,res) => {
+  try{
+    const {userId} = req.params;
+    const user = await User.findById(userId).populate("sentFriendRequests","name email image").lean();
+
+    const sentFriendRequests = user.sentFriendRequests;
+
+    res.json(sentFriendRequests);
+  } catch(error){
+    console.log("error",error);
+    res.status(500).json({ error: "Internal Server" });
+  }
+})
+
+router.get("/friends/:userId",(req,res) => {
+  try{
+    const {userId} = req.params;
+
+    User.findById(userId).populate("friends").then((user) => {
+      if(!user){
+        return res.status(404).json({message: "User not found"})
       }
-  
-      const followersCount = user.followers.length;
-      res.status(200).json({ followersCount });
-    } catch (error) {
-      console.error("Error getting followers count:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-  
-  // Get count of users being followed by a user
-  router.get("/:id/following/count", async (req, res) => {
-    try {
-      const user = await User.findById(req.params.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-  
-      const followingCount = user.following.length;
-      res.status(200).json({ followingCount });
-    } catch (error) {
-      console.error("Error getting following count:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
+
+      const friendIds = user.friends.map((friend) => friend._id);
+
+      res.status(200).json(friendIds);
+    })
+  } catch(error){
+    console.log("error",error);
+    res.status(500).json({message:"internal server error"})
+  }
+})
 
 module.exports = router;

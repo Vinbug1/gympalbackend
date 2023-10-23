@@ -5,7 +5,6 @@ const userSchema = new mongoose.Schema({
 
   image: {
     type: String,
-    default: ""
   },
   name: {
     type: String,
@@ -15,7 +14,7 @@ const userSchema = new mongoose.Schema({
   //   type: String,
   //   required: true,
   // },
-  biography: {
+  status: {
     type: String,
     required: true,
   },

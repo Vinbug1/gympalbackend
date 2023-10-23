@@ -6,26 +6,17 @@ const postSchema = new mongoose.Schema({
      ref: 'User',
       required: true
      },
-//      comment: { 
-//         type: mongoose.Schema.Types.ObjectId,
-//          ref: 'Comment',
-//           required: true
-//          },
   content: { 
     type: String, 
     required: true 
-}, // Short story content
+}, 
 like:{
     type:Number,
     default: 0
 },
-  image: { 
-    type: String,
-     default:'' 
-    }, // URL of the uploaded image
+  image: { type: String},
     
   createdAt: { type: Date, default: Date.now },
-  // Add more post-related fields as needed
 });
 
 const Post = mongoose.model('Post', postSchema);

@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 
 const storySchema = new mongoose.Schema({
-  image: { 
+  image: {
     type: String,
-     default:'' 
-    }, 
+  },
   content:{
     type: String,
     required: true
